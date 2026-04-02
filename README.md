@@ -1,36 +1,111 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# COD Intelligence Pilot
 
-## Getting Started
+Pilot-first COD decision and confirmation system for Moroccan Shopify merchants. This repo implements a conservative `Next.js + Supabase` modular monolith focused on one production loop:
 
-First, run the development server:
+`Shopify intake -> normalization -> weighted risk scoring -> WhatsApp outreach or manual review -> merchant final decision -> later outcome capture`
+
+## What ships in this repo
+
+- Merchant dashboard for queues, rules, templates, outcomes, and order review
+- Lightweight internal ops console for pilot support
+- Shopify webhook endpoint with signature verification and idempotency hook
+- WhatsApp webhook endpoint for verification and inbound reply classification
+- DB-backed worker endpoint for outbound messaging and timeout jobs
+- Supabase migration with tenant-aware tables, RLS posture, and seeded defaults
+- Demo mode so the full workflow can be explored before Supabase is configured
+
+## Stack
+
+- `Next.js 16` with the App Router
+- `Supabase Auth + Postgres`
+- `Tailwind CSS 4`
+- `Vitest` for domain and webhook helper tests
+
+## Demo mode vs live mode
+
+If the Supabase env vars are missing, the app automatically falls back to seeded pilot data. This keeps the workflow reviewable while the backend is still being wired.
+
+Live mode activates when these env vars are set:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+## Local setup
+
+1. Copy `.env.example` to `.env.local`
+2. Fill the Supabase and provider secrets
+3. Install dependencies
+4. Run the app
+
+```bash
+npm install
+npm run dev
+```
+
+## Environment variables
+
+```bash
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+SHOPIFY_WEBHOOK_SECRET=
+WHATSAPP_VERIFY_TOKEN=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WORKER_SHARED_SECRET=
+```
+
+## Database bootstrap
+
+Apply the migration in [`supabase/migrations/202604030100_pilot_foundation.sql`](./supabase/migrations/202604030100_pilot_foundation.sql).
+
+After creating a merchant, call:
+
+```sql
+select public.seed_merchant_defaults('<merchant_uuid>');
+```
+
+That seeds:
+
+- the pilot rule set
+- French-first WhatsApp templates
+
+## Main routes
+
+- `/dashboard` merchant queue and KPI surface
+- `/dashboard/orders/[id]` order review, override, and outcome capture
+- `/dashboard/onboarding` readiness checklist
+- `/dashboard/rules` weighted rule catalog
+- `/dashboard/templates` WhatsApp journeys
+- `/dashboard/outcomes` recorded outcomes
+- `/internal` lightweight cross-merchant support console
+- `/api/webhooks/shopify` Shopify intake
+- `/api/webhooks/whatsapp` Meta verification and inbound replies
+- `/api/jobs/process` worker batch processor
+
+## Scripts
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run lint
+npm run test
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Testing
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Current automated coverage focuses on the core pilot logic:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Moroccan phone and order normalization
+- weighted scoring and hard-stop precedence
+- WhatsApp reply classification
+- Shopify webhook signature verification
 
-## Learn More
+## Notes
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- New merchants are expected to start in conservative automation mode.
+- Live processing is designed for `new orders only` after go-live.
+- Final order outcomes can be recorded later and manually in v1.
+- The repo currently lives in `cod-intelligence-pilot/` because the parent workspace folder name is not a valid npm package name.
