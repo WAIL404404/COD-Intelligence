@@ -56,18 +56,6 @@ as $$
   select nullif(auth.jwt() ->> 'merchant_id', '')::uuid
 $$;
 
-create or replace function app.is_internal_staff()
-returns boolean
-language sql
-stable
-as $$
-  select exists (
-    select 1
-    from public.internal_staff staff
-    where staff.user_id = auth.uid()
-  )
-$$;
-
 create table if not exists public.merchants (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -100,6 +88,18 @@ create table if not exists public.internal_staff (
   role public.app_role not null default 'internal_staff',
   created_at timestamptz not null default now()
 );
+
+create or replace function app.is_internal_staff()
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from public.internal_staff staff
+    where staff.user_id = auth.uid()
+  )
+$$;
 
 create table if not exists public.channel_connections (
   id uuid primary key default gen_random_uuid(),
@@ -486,8 +486,8 @@ begin
 
   insert into public.message_templates (merchant_id, journey, locale, name, body, variables, tone_hint)
   values
-    (target_merchant, 'confirmation', 'fr-MA', 'Confirmation COD', 'Bonjour {{customerName}}, nous confirmons votre commande {{orderNumber}} de {{amount}}. Repondez OUI pour confirmer ou ANNULER si vous ne la souhaitez plus.', array['customerName', 'orderNumber', 'amount'], 'Warm, concise, trust-building'),
-    (target_merchant, 'address_clarification', 'fr-MA', 'Clarification adresse', 'Bonjour {{customerName}}, il nous manque un detail pour livrer la commande {{orderNumber}}. Merci d''envoyer l''adresse complete ou votre localisation WhatsApp.', array['customerName', 'orderNumber'], 'Polite, low-friction, asks only for missing delivery details')
+    (target_merchant, 'confirmation', 'fr-MA', 'cod_confirmation_fr', 'Bonjour {{customerName}}, nous confirmons votre commande {{orderNumber}} de {{amount}}. Repondez OUI pour confirmer ou ANNULER si vous ne la souhaitez plus.', array['customerName', 'orderNumber', 'amount'], 'Warm, concise, trust-building'),
+    (target_merchant, 'address_clarification', 'fr-MA', 'cod_address_clarification_fr', 'Bonjour {{customerName}}, il nous manque un detail pour livrer la commande {{orderNumber}}. Merci d''envoyer l''adresse complete ou votre localisation WhatsApp.', array['customerName', 'orderNumber'], 'Polite, low-friction, asks only for missing delivery details')
   on conflict (merchant_id, journey, locale) do nothing;
 end;
 $$;

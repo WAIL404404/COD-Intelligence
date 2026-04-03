@@ -2,6 +2,15 @@
 import { renderTemplate } from "@/lib/domain/whatsapp";
 import { env, hasWhatsappConfig } from "@/lib/env";
 
+type TemplateParameter = string | number;
+
+type TemplateSendParams = {
+  to: string;
+  templateName: string;
+  languageCode: string;
+  parameters: TemplateParameter[];
+};
+
 export function verifyWhatsAppChallenge(params: URLSearchParams) {
   const mode = params.get("hub.mode");
   const token = params.get("hub.verify_token");
@@ -40,10 +49,58 @@ export function extractInboundMessages(payload: Record<string, any>) {
   return messages;
 }
 
-export async function sendWhatsAppTextMessage(params: {
-  to: string;
-  body: string;
-}) {
+function buildGraphApiHeaders() {
+  return {
+    Authorization: `Bearer ${env.whatsappAccessToken}`,
+    "Content-Type": "application/json",
+  };
+}
+
+export function toWhatsAppLanguageCode(locale: string) {
+  const normalized = locale.toLowerCase();
+
+  if (normalized.startsWith("fr")) {
+    return "fr";
+  }
+
+  if (normalized.startsWith("ar")) {
+    return "ar";
+  }
+
+  if (normalized.startsWith("en")) {
+    return "en_US";
+  }
+
+  return "fr";
+}
+
+export function buildWhatsAppTemplatePayload(params: TemplateSendParams) {
+  return {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: params.to,
+    type: "template",
+    template: {
+      name: params.templateName,
+      language: {
+        code: params.languageCode,
+      },
+      components: params.parameters.length
+        ? [
+            {
+              type: "body",
+              parameters: params.parameters.map((parameter) => ({
+                type: "text",
+                text: String(parameter),
+              })),
+            },
+          ]
+        : [],
+    },
+  };
+}
+
+export async function sendWhatsAppTemplateMessage(params: TemplateSendParams) {
   if (!hasWhatsappConfig) {
     return {
       ok: false,
@@ -56,20 +113,8 @@ export async function sendWhatsAppTextMessage(params: {
     `https://graph.facebook.com/v21.0/${env.whatsappPhoneNumberId}/messages`,
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.whatsappAccessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: params.to,
-        type: "text",
-        text: {
-          preview_url: false,
-          body: params.body,
-        },
-      }),
+      headers: buildGraphApiHeaders(),
+      body: JSON.stringify(buildWhatsAppTemplatePayload(params)),
     },
   );
 

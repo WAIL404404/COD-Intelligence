@@ -16,6 +16,7 @@ export const env = {
   whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN?.trim() || "",
   whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID?.trim() || "",
   workerSharedSecret: process.env.WORKER_SHARED_SECRET?.trim() || "",
+  cronSecret: process.env.CRON_SECRET?.trim() || "",
 };
 
 export const hasSupabaseConfig = requiredSupabaseVars.every(

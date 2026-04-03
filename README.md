@@ -55,6 +55,7 @@ WHATSAPP_VERIFY_TOKEN=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_PHONE_NUMBER_ID=
 WORKER_SHARED_SECRET=
+CRON_SECRET=
 ```
 
 ## Database bootstrap
@@ -108,4 +109,6 @@ Current automated coverage focuses on the core pilot logic:
 - New merchants are expected to start in conservative automation mode.
 - Live processing is designed for `new orders only` after go-live.
 - Final order outcomes can be recorded later and manually in v1.
+- Approved WhatsApp template names are stored in `message_templates.name`.
+- [`vercel.json`](./vercel.json) schedules the worker endpoint every 5 minutes. Use a Vercel plan that supports that cron frequency.
 - The repo currently lives in `cod-intelligence-pilot/` because the parent workspace folder name is not a valid npm package name.

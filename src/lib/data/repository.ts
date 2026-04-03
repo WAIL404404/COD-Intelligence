@@ -38,6 +38,11 @@ export type ProcessedOrderInput = {
   assessment: RiskAssessment;
   decision: OrderRecord["decision"];
   outboundMessageBody?: string | null;
+  outboundTemplate?: {
+    name: string;
+    locale: string;
+    parameters: Array<string | number>;
+  } | null;
 };
 
 export type InboundWhatsAppInput = {
@@ -95,6 +100,15 @@ export type AppRepository = {
   persistWhatsAppInbound(
     input: InboundWhatsAppInput,
   ): Promise<{ orderId?: string; outcome: WhatsAppOutcome; status: OrderStatus | null }>;
+  markOrderNoResponse(params: {
+    orderId: string;
+    expectedStatus: OrderStatus;
+  }): Promise<{ escalated: boolean }>;
+  recordOutgoingMessageResult(params: {
+    threadId?: string | null;
+    orderId?: string | null;
+    providerMessageId: string;
+  }): Promise<void>;
   leaseDueJobs(limit: number): Promise<WorkerJob[]>;
   completeJob(jobId: string, note?: string): Promise<void>;
   failJob(jobId: string, errorMessage: string): Promise<void>;
@@ -129,6 +143,10 @@ const demoRepository: AppRepository = {
       status: "manual_review",
     };
   },
+  async markOrderNoResponse() {
+    return { escalated: true };
+  },
+  async recordOutgoingMessageResult() {},
   async leaseDueJobs(limit) {
     return demoInternalOperations.pendingJobs.slice(0, limit).map((job) => ({
       id: job.id,
@@ -859,6 +877,11 @@ function createLiveRepository(session?: AppSession): AppRepository {
           direction: "outbound",
           delivery_status: "queued",
           body: input.outboundMessageBody ?? "",
+          payload: {
+            templateName: input.outboundTemplate?.name ?? null,
+            templateLocale: input.outboundTemplate?.locale ?? null,
+            templateParameters: input.outboundTemplate?.parameters ?? [],
+          },
         });
 
         await admin.from("job_queue").insert([
@@ -873,6 +896,9 @@ function createLiveRepository(session?: AppSession): AppRepository {
               threadId: threadRow?.id,
               to: input.normalizedOrder.phoneNormalized,
               messageBody: input.outboundMessageBody,
+              templateName: input.outboundTemplate?.name ?? null,
+              templateLocale: input.outboundTemplate?.locale ?? null,
+              templateParameters: input.outboundTemplate?.parameters ?? [],
             },
           },
           {
@@ -974,6 +1000,74 @@ function createLiveRepository(session?: AppSession): AppRepository {
         outcome: input.outcome,
         status: nextStatus,
       };
+    },
+    async markOrderNoResponse(params) {
+      const { data: decision } = await admin
+        .from("order_decisions")
+        .select("merchant_id, current_status, last_message_outcome")
+        .eq("order_id", params.orderId)
+        .maybeSingle();
+
+      if (
+        !decision ||
+        decision.current_status !== params.expectedStatus ||
+        decision.last_message_outcome
+      ) {
+        return { escalated: false };
+      }
+
+      await admin
+        .from("order_decisions")
+        .update({
+          current_status: "manual_review",
+          system_decision: "manual_review",
+          recommended_action: "manual_review",
+          last_message_outcome: "no_response",
+          merchant_final_decision: null,
+        })
+        .eq("order_id", params.orderId);
+
+      await admin
+        .from("message_threads")
+        .update({
+          latest_outcome: "no_response",
+        })
+        .eq("order_id", params.orderId);
+
+      await admin.from("order_action_logs").insert({
+        merchant_id: decision.merchant_id,
+        order_id: params.orderId,
+        actor_type: "system",
+        actor_id: "timeout-worker",
+        actor_name: "Timeout worker",
+        action_type: "no_response_escalation",
+        summary:
+          "Customer did not reply before the WhatsApp timeout. Order escalated to manual review.",
+      });
+
+      return { escalated: true };
+    },
+    async recordOutgoingMessageResult(params) {
+      if (params.threadId) {
+        await admin
+          .from("message_events")
+          .update({
+            provider_message_id: params.providerMessageId,
+            delivery_status: "sent",
+          })
+          .eq("thread_id", params.threadId)
+          .eq("direction", "outbound")
+          .is("provider_message_id", null);
+      }
+
+      if (params.orderId) {
+        await admin
+          .from("message_threads")
+          .update({
+            last_outbound_at: new Date().toISOString(),
+          })
+          .eq("order_id", params.orderId);
+      }
     },
     async leaseDueJobs(limit) {
       const { data: jobs } = await admin

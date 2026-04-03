@@ -132,6 +132,24 @@ export async function processShopifyOrderWebhook(params: {
         amount: `${Math.round(normalized.totalAmount)} ${normalized.currency}`,
       })
     : null;
+  const outboundTemplate = template
+    ? {
+        name: template.name,
+        locale: template.locale,
+        parameters: template.variables.map((variable) => {
+          switch (variable) {
+            case "customerName":
+              return normalized.customerName;
+            case "orderNumber":
+              return params.payload.name || `#${params.payload.order_number}`;
+            case "amount":
+              return `${Math.round(normalized.totalAmount)} ${normalized.currency}`;
+            default:
+              return "";
+          }
+        }),
+      }
+    : null;
 
   const result = await params.repository.persistProcessedOrder({
     merchantId: params.merchant.id,
@@ -149,6 +167,7 @@ export async function processShopifyOrderWebhook(params: {
     assessment,
     decision,
     outboundMessageBody,
+    outboundTemplate,
   });
 
   return {
