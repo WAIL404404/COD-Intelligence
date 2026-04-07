@@ -111,4 +111,3 @@ Current automated coverage focuses on the core pilot logic:
 - Final order outcomes can be recorded later and manually in v1.
 - Approved WhatsApp template names are stored in `message_templates.name`.
 - [`vercel.json`](./vercel.json) schedules the worker endpoint every 5 minutes. Use a Vercel plan that supports that cron frequency.
-- The repo currently lives in `cod-intelligence-pilot/` because the parent workspace folder name is not a valid npm package name.
